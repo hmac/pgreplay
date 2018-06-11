@@ -22,7 +22,8 @@ main = do
     Left e  -> error $ parseErrorPretty e
     Right t -> do
       -- pPrint t
-      putStrLn $ "Parsed " ++ (show . length) t ++ " log items successfully."
+      pPrint (head t)
+      -- putStrLn $ "Parsed " ++ (show . length) t ++ " log items successfully."
 
 benchMain :: T.Text -> IO ()
 benchMain file = benchmark $ nfIO (run file)

@@ -1,12 +1,15 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Lib (logFile) where
 
-import qualified Data.Text.Lazy   as T
-import           Data.Time.Clock  (UTCTime)
+import qualified Data.Text.Lazy       as T
+import           Data.Time.Clock      (UTCTime)
 import           Data.Time.Format
-import           Prelude          hiding (log)
+import           Data.Void
+import           Prelude              hiding (log)
 import           Text.Megaparsec
+import           Text.Megaparsec.Char
 
-type Parser = Parsec Dec T.Text
+type Parser = Parsec Void T.Text
 
 data Log = Log { time      :: UTCTime
                , database  :: T.Text
@@ -33,11 +36,11 @@ log :: Parser Log
 log = do
   time <- timestamp
   char '|'
-  database <- T.pack <$> some (noneOf "|")
+  database <- T.pack <$> some (noneOf ['|'])
   char '|'
-  _ <- T.pack <$> some (noneOf "|")
+  _ <- T.pack <$> some (noneOf ['|'])
   char '|'
-  sessionId <- T.pack <$> some (noneOf "|")
+  sessionId <- T.pack <$> some (noneOf ['|'])
   char '|'
   entry <- logEntry <|> detailEntry
   pure Log { time = time, database = database, sessionId = sessionId, entry = entry }
@@ -70,7 +73,7 @@ detailEntry = do
           string " = "
           val <- quote '\'' $ many bindChar
           pure $ T.pack val
-        bindChar = (string "''" >> pure '\'') <|> noneOf "'"
+        bindChar = (string "''" >> pure '\'') <|> noneOf ['\'']
 
 entryWithDuration :: Parser Payload
 entryWithDuration = do
@@ -115,7 +118,7 @@ connDisconnected = string "disconnection: " >> ConnDisc <$> textLine
 
 -- Parses all characters on a single line, delineated by \n
 textLine :: Parser T.Text
-textLine = T.pack <$> many (noneOf "\n")
+textLine = T.pack <$> many (noneOf ['\n'])
 
 msDuration :: Parser Float
 msDuration = label "duration_ms" $ do
