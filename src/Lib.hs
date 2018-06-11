@@ -1,4 +1,4 @@
-module ParsePgLog (logFile) where
+module Lib (logFile) where
 
 import qualified Data.Text.Lazy   as T
 import           Data.Time.Clock  (UTCTime)
