@@ -1,0 +1,6 @@
+parsepglog.cabal
+.DS_Store
+sample.log*
+*.o
+*.hi
+.stack-work
