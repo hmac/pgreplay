@@ -11,6 +11,7 @@ dependencies:
 - text
 - time
 - megaparsec
+- attoparsec
 
 library:
   source-dirs: src
@@ -18,7 +19,7 @@ library:
 executables:
   parsepglog:
     main: Main.hs
-    source-dirs: .
+    source-dirs: app
     ghc-options:
     - -threaded
     - -rtsopts
@@ -30,5 +31,3 @@ executables:
     - pretty-simple
     - bytestring
     - zlib
-    - criterion
-    - megaparsec

@@ -1,15 +1,14 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Lib (logFile) where
+module Lib where
 
-import qualified Data.Text.Lazy       as T
-import           Data.Time.Clock      (UTCTime)
+import           Control.Applicative       ((<|>))
+import           Data.Attoparsec.Text.Lazy
+import           Data.Char                 (isDigit)
+import qualified Data.Text                 as T
+import           Data.Time.Clock           (UTCTime)
 import           Data.Time.Format
 import           Data.Void
-import           Prelude              hiding (log)
-import           Text.Megaparsec
-import           Text.Megaparsec.Char
-
-type Parser = Parsec Void T.Text
+import           Prelude                   hiding (log, take)
 
 data Log = Log { time      :: UTCTime
                , database  :: T.Text
@@ -27,28 +26,28 @@ data Payload = Detail { bindings :: [T.Text] }
               | ConnDisc T.Text
               deriving (Eq, Show)
 
--- Parses an entire log file
-logFile :: Parser [Log]
-logFile = log `sepEndBy1` newline <* eof
+-- A synonym for log that conflicts less
+parseLog = log
 
 -- Parses a single log
 log :: Parser Log
 log = do
   time <- timestamp
   char '|'
-  database <- T.pack <$> some (noneOf ['|'])
+  database <- takeTill (== '|')
   char '|'
-  _ <- T.pack <$> some (noneOf ['|'])
+  _ <- takeTill (== '|')
   char '|'
-  sessionId <- T.pack <$> some (noneOf ['|'])
+  sessionId <- takeTill (== '|')
   char '|'
   entry <- logEntry <|> detailEntry
+  endOfLine
   pure Log { time = time, database = database, sessionId = sessionId, entry = entry }
 
 -- parses 2001-01-01 12:33:44.123 GMT
 timestamp :: Parser UTCTime
-timestamp = label "timestamp" $ do
-  input <- count 27 asciiChar
+timestamp = do
+  input <- T.unpack <$> take 27
   parseTimeM False defaultTimeLocale "%Y-%m-%d %H:%M:%S%Q %Z" input
 
 logEntry :: Parser Payload
@@ -69,11 +68,11 @@ detailEntry = do
   pure Detail { bindings = bs }
   where binding = do
           char '$'
-          _bindingIdx <- digitChar
+          _bindingIdx <- digit
           string " = "
-          val <- quote '\'' $ many bindChar
+          val <- quote '\'' $ many' bindChar
           pure $ T.pack val
-        bindChar = (string "''" >> pure '\'') <|> noneOf ['\'']
+        bindChar = (string "''" >> pure '\'') <|> notChar '\''
 
 entryWithDuration :: Parser Payload
 entryWithDuration = do
@@ -99,7 +98,7 @@ executeStmt = do
   ExecStmt <$> unnamedStmt
 
 unnamedStmt :: Parser T.Text
-unnamedStmt = T.unlines <$> textLine `sepBy1` try (newline >> tab)
+unnamedStmt = T.unlines <$> textLine `sepBy1` (endOfLine >> tab)
 
 durationStmt :: Float -> Parser Payload
 durationStmt d = pure $ Duration d
@@ -118,18 +117,24 @@ connDisconnected = string "disconnection: " >> ConnDisc <$> textLine
 
 -- Parses all characters on a single line, delineated by \n
 textLine :: Parser T.Text
-textLine = T.pack <$> many (noneOf ['\n'])
+textLine = takeTill (== '\n')
 
 msDuration :: Parser Float
-msDuration = label "duration_ms" $ do
-  secs <- read <$> some digitChar
+msDuration = do
+  secs <- read . T.unpack <$> takeWhile1 isDigit
   char '.'
-  millis <- read <$> some digitChar
+  millis <- read . T.unpack <$> takeWhile1 isDigit
   string " ms"
   pure $ secs + millis / 1000
 
 quote :: Char -> Parser a -> Parser a
 quote c = between (char c) (char c)
+
+between :: Parser a -> Parser b -> Parser c -> Parser c
+between l r p = l >> p <* r
+
+tab :: Parser Char
+tab = char '\t'
 
 sampleLog :: T.Text
 sampleLog = T.pack "2018-05-03 10:26:28.099 GMT|gc_paysvc_live|gc_paysvc_live|5aead9c5.68b7|DETAIL:  parameters: $1 = '', $2 = '30', $3 = '2018-05-03 10:26:27.905086+00', $4 = '544195344', $5 = 'this is a quote: '''"
