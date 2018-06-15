@@ -10,10 +10,11 @@ import           Data.Time.Format
 import           Data.Void
 import           Prelude                   hiding (log, take)
 
-data Log = Log { time      :: UTCTime
-               , database  :: T.Text
-               , sessionId :: T.Text
-               , entry     :: Payload } deriving (Eq, Show)
+data Log = Log { time     :: UTCTime
+               , user     :: T.Text
+               , database :: T.Text
+               , session  :: T.Text
+               , entry    :: Payload } deriving (Eq, Show)
 
 data Payload = Detail { bindings :: [T.Text] }
               | Stmt T.Text
@@ -30,19 +31,20 @@ data Payload = Detail { bindings :: [T.Text] }
 parseLog = log
 
 -- Parses a single log
+-- e.g. 2018-05-03 10:26:28.099 GMT|gc_paysvc_live|gc_paysvc_live|5aead9c5.68b7|DETAIL:...
 log :: Parser Log
 log = do
   time <- timestamp
   char '|'
+  user <- takeTill (== '|')
+  char '|'
   database <- takeTill (== '|')
   char '|'
-  _ <- takeTill (== '|')
-  char '|'
-  sessionId <- takeTill (== '|')
+  session <- takeTill (== '|')
   char '|'
   entry <- logEntry <|> detailEntry
   endOfLine
-  pure Log { time = time, database = database, sessionId = sessionId, entry = entry }
+  pure Log { time = time, user = user, database = database, session = session, entry = entry }
 
 -- parses 2001-01-01 12:33:44.123 GMT
 timestamp :: Parser UTCTime
@@ -98,26 +100,26 @@ executeStmt = do
   ExecStmt <$> unnamedStmt
 
 unnamedStmt :: Parser T.Text
-unnamedStmt = T.unlines <$> textLine `sepBy1` (endOfLine >> tab)
+unnamedStmt = T.unlines <$> restOfLine `sepBy1` (endOfLine >> tab)
 
 durationStmt :: Float -> Parser Payload
 durationStmt d = pure $ Duration d
 
 statementEntry :: Parser Payload
-statementEntry = string "statement: " >> Stmt <$> textLine
+statementEntry = string "statement: " >> Stmt <$> restOfLine
 
 connReceived :: Parser Payload
-connReceived = string "connection received: " >> ConnRecv <$> textLine
+connReceived = string "connection received: " >> ConnRecv <$> restOfLine
 
 connAuthorized :: Parser Payload
-connAuthorized = string "connection authorized: " >> ConnAuth <$> textLine
+connAuthorized = string "connection authorized: " >> ConnAuth <$> restOfLine
 
 connDisconnected :: Parser Payload
-connDisconnected = string "disconnection: " >> ConnDisc <$> textLine
+connDisconnected = string "disconnection: " >> ConnDisc <$> restOfLine
 
 -- Parses all characters on a single line, delineated by \n
-textLine :: Parser T.Text
-textLine = takeTill (== '\n')
+restOfLine :: Parser T.Text
+restOfLine = takeTill (== '\n')
 
 msDuration :: Parser Float
 msDuration = do
