@@ -55,13 +55,14 @@ timestamp = do
 logEntry :: Parser Payload
 logEntry = do
   string "LOG:  "
-  choice [statementEntry
-        , detailEntry
-        , executeStmt
-        , connReceived
-        , connAuthorized
-        , connDisconnected
-        , entryWithDuration]
+  choice
+    [ string "duration: " >> entryWithDuration
+    , string "statement: " >> statementEntry
+    , string "execute <unnamed>: " >> executeStmt
+    , string "connection received: " >> connReceived
+    , string "connection authorized: " >> connAuthorized
+    , string "disconnection: " >> connDisconnected
+    ]
 
 detailEntry :: Parser Payload
 detailEntry = do
@@ -78,26 +79,17 @@ detailEntry = do
 
 entryWithDuration :: Parser Payload
 entryWithDuration = do
-  d <- duration
+  d <- msDuration
   choice [parseStmt, bindStmt, durationStmt d]
 
-duration :: Parser Float
-duration = string "duration: " >> msDuration
-
 parseStmt :: Parser Payload
-parseStmt = do
-  string "  parse <unnamed>: "
-  ParseStmt <$> unnamedStmt
+parseStmt = ParseStmt <$> unnamedStmt
 
 bindStmt :: Parser Payload
-bindStmt = do
-  string "  bind <unnamed>: "
-  BindStmt <$> unnamedStmt
+bindStmt = BindStmt <$> unnamedStmt
 
 executeStmt :: Parser Payload
-executeStmt = do
-  string "execute <unnamed>: "
-  ExecStmt <$> unnamedStmt
+executeStmt = ExecStmt <$> unnamedStmt
 
 unnamedStmt :: Parser T.Text
 unnamedStmt = T.unlines <$> restOfLine `sepBy1` (endOfLine >> tab)
@@ -106,16 +98,16 @@ durationStmt :: Float -> Parser Payload
 durationStmt d = pure $ Duration d
 
 statementEntry :: Parser Payload
-statementEntry = string "statement: " >> Stmt <$> restOfLine
+statementEntry = Stmt <$> restOfLine
 
 connReceived :: Parser Payload
-connReceived = string "connection received: " >> ConnRecv <$> restOfLine
+connReceived = ConnRecv <$> restOfLine
 
 connAuthorized :: Parser Payload
-connAuthorized = string "connection authorized: " >> ConnAuth <$> restOfLine
+connAuthorized = ConnAuth <$> restOfLine
 
 connDisconnected :: Parser Payload
-connDisconnected = string "disconnection: " >> ConnDisc <$> restOfLine
+connDisconnected = ConnDisc <$> restOfLine
 
 -- Parses all characters on a single line, delineated by \n
 restOfLine :: Parser T.Text
