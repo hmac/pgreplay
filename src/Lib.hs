@@ -5,6 +5,7 @@ import           Control.Applicative       ((<|>))
 import           Data.Attoparsec.Text.Lazy
 import           Data.Char                 (isDigit)
 import qualified Data.Text                 as T
+import qualified Data.Text.Read            as T (rational)
 import           Data.Time.Clock           (UTCTime)
 import           Data.Time.Format
 import           Data.Void
@@ -18,7 +19,7 @@ data Log = Log { time     :: UTCTime
 
 data Payload = Detail { bindings :: [T.Text] }
               | Stmt T.Text
-              | Duration Float
+              | Duration Double
               | ParseStmt T.Text
               | BindStmt T.Text
               | ExecStmt T.Text
@@ -79,14 +80,14 @@ detailEntry = do
 
 entryWithDuration :: Parser Payload
 entryWithDuration = do
-  d <- msDuration
+  d <- double <* string " ms"
   choice [parseStmt, bindStmt, durationStmt d]
 
 parseStmt :: Parser Payload
-parseStmt = ParseStmt <$> unnamedStmt
+parseStmt = string "  parse <unnamed>: " >> ParseStmt <$> unnamedStmt
 
 bindStmt :: Parser Payload
-bindStmt = BindStmt <$> unnamedStmt
+bindStmt = string "  bind <unnamed>: " >> BindStmt <$> unnamedStmt
 
 executeStmt :: Parser Payload
 executeStmt = ExecStmt <$> unnamedStmt
@@ -94,7 +95,7 @@ executeStmt = ExecStmt <$> unnamedStmt
 unnamedStmt :: Parser T.Text
 unnamedStmt = T.unlines <$> restOfLine `sepBy1` (endOfLine >> tab)
 
-durationStmt :: Float -> Parser Payload
+durationStmt :: Double -> Parser Payload
 durationStmt d = pure $ Duration d
 
 statementEntry :: Parser Payload
@@ -113,14 +114,6 @@ connDisconnected = ConnDisc <$> restOfLine
 restOfLine :: Parser T.Text
 restOfLine = takeTill (== '\n')
 
-msDuration :: Parser Float
-msDuration = do
-  secs <- read . T.unpack <$> takeWhile1 isDigit
-  char '.'
-  millis <- read . T.unpack <$> takeWhile1 isDigit
-  string " ms"
-  pure $ secs + millis / 1000
-
 quote :: Char -> Parser a -> Parser a
 quote c = between (char c) (char c)
 
@@ -129,6 +122,3 @@ between l r p = l >> p <* r
 
 tab :: Parser Char
 tab = char '\t'
-
-sampleLog :: T.Text
-sampleLog = T.pack "2018-05-03 10:26:28.099 GMT|gc_paysvc_live|gc_paysvc_live|5aead9c5.68b7|DETAIL:  parameters: $1 = '', $2 = '30', $3 = '2018-05-03 10:26:27.905086+00', $4 = '544195344', $5 = 'this is a quote: '''"

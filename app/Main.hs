@@ -23,7 +23,9 @@ main = do
               Done rest res      -> do
                 if T.null rest
                    then putStrLn $ "Parsed " ++ show len ++ " log lines."
-                   else go parser rest (len+1)
+                   else do
+                     pPrint res
+                     go parser rest (len+1)
 
 readGzipFile :: String -> IO T.Text
 readGzipFile filename = decodeUtf8 . decompress <$> BS.readFile filename
