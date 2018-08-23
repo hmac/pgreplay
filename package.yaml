@@ -12,6 +12,8 @@ dependencies:
 - time
 - megaparsec
 - attoparsec
+- bytestring
+- unix-time
 
 library:
   source-dirs: src
@@ -31,7 +33,12 @@ executables:
     - pretty-simple
     - bytestring
     - zlib
-  bench:
+    - conduit
+    - conduit-extra
+    - conduit-combinators
+
+benchmarks:
+  parser:
     main: Main.hs
     source-dirs: bench
     ghc-options:
@@ -41,3 +48,4 @@ executables:
     dependencies:
     - parsepglog
     - criterion
+    - bytestring

@@ -1,32 +1,31 @@
-import           Codec.Compression.GZip    (decompress)
-import           Data.Attoparsec.Text.Lazy
-import qualified Data.ByteString.Lazy      as BS (readFile)
-import           Data.List                 (isSuffixOf)
-import qualified Data.Text.Lazy            as T
-import           Data.Text.Lazy.Encoding   (decodeUtf8)
-import qualified Data.Text.Lazy.IO         as T (readFile)
-import           Prelude                   hiding (readFile)
-import           System.Environment        (getArgs)
-import           Text.Pretty.Simple
+import           System.Environment       (getArgs)
 
-import           Lib                       (parseLog)
+import           Conduit
+import           Data.Conduit.Attoparsec
+import qualified Data.Conduit.Combinators as C
+
+import           Parser.ByteString        (Log (..), Payload (..), parseLog)
+
+import           Data.Monoid              (Sum (..))
 
 main :: IO ()
 main = do
   [filename] <- getArgs
-  let readFile = if ".gz" `isSuffixOf` filename then readGzipFile else T.readFile
-  file <- readFile filename
-  go parseLog file 0
-    where
-      go parser input len = case parse parser input of
-              Fail rest ctxs err -> error err
-              Done rest res      -> do
-                if T.null rest
-                   then putStrLn $ "Parsed " ++ show len ++ " log lines."
-                   else do
-                     pPrint res
-                     go parser rest (len+1)
+  stats <- runConduitRes
+            $ C.sourceFile filename
+           .| conduitParser Parser.ByteString.parseLog
+           .| mapC (\(_, l) -> countLogTypes l)
+           -- .| filterC isJust
+           .| foldC
+  let (statements, conns, discs) = stats
+  putStrLn $ "Number of statements: " ++ show statements
+  putStrLn $ "Number of connections: " ++ show conns
+  putStrLn $ "Number of disconnections: " ++ show discs
 
-readGzipFile :: String -> IO T.Text
-readGzipFile filename = decodeUtf8 . decompress <$> BS.readFile filename
 
+countLogTypes :: Parser.ByteString.Log -> (Sum Int, Sum Int, Sum Int)
+countLogTypes l = case entry l of
+                    Stmt _     -> (Sum 1, Sum 0, Sum 0)
+                    ConnRecv _ -> (Sum 0, Sum 1, Sum 0)
+                    ConnDisc _ -> (Sum 0, Sum 0, Sum 1)
+                    _          -> (Sum 0, Sum 0, Sum 0)

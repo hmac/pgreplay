@@ -1,17 +1,17 @@
+{-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
-module Lib where
+module Parser.Text where
 
 import           Control.Applicative       ((<|>))
 import           Data.Attoparsec.Text.Lazy
-import           Data.Char                 (isDigit)
+import           Data.ByteString           (ByteString)
+import qualified Data.ByteString.Char8     as C8 (pack)
 import qualified Data.Text                 as T
-import qualified Data.Text.Read            as T (rational)
-import           Data.Time.Clock           (UTCTime)
-import           Data.Time.Format
-import           Data.Void
+import           Data.Text.Encoding        (encodeUtf8)
+import           Data.UnixTime             (UnixTime, parseUnixTime)
 import           Prelude                   hiding (log, take)
 
-data Log = Log { time     :: UTCTime
+data Log = Log { time     :: UnixTime
                , user     :: T.Text
                , database :: T.Text
                , session  :: T.Text
@@ -28,7 +28,23 @@ data Payload = Detail { bindings :: [T.Text] }
               | ConnDisc T.Text
               deriving (Eq, Show)
 
+-- Parses a (possible multiline) log string, returning a single Text with no
+-- newlines or tabs
+parseLogStr :: Parser T.Text
+parseLogStr = do
+  let multi ls = do
+        line <- takeWhile1 (/= '\n')
+        char '\n'
+        c <- peekChar
+        case c of
+          Just '\t' -> do
+            char '\t'
+            multi (ls ++ [line])
+          _         -> pure (ls ++ [line])
+  T.unlines <$> multi []
+
 -- A synonym for log that conflicts less
+parseLog :: Parser Log
 parseLog = log
 
 -- Parses a single log
@@ -45,13 +61,16 @@ log = do
   char '|'
   entry <- logEntry <|> detailEntry
   endOfLine
-  pure Log { time = time, user = user, database = database, session = session, entry = entry }
+  pure Log { time, user, database, session, entry }
 
 -- parses 2001-01-01 12:33:44.123 GMT
-timestamp :: Parser UTCTime
+timestamp :: Parser UnixTime
 timestamp = do
-  input <- T.unpack <$> take 27
-  parseTimeM False defaultTimeLocale "%Y-%m-%d %H:%M:%S%Q %Z" input
+  input <- take 27
+  pure $ parseUnixTime pgTimeFormat (encodeUtf8 input)
+
+pgTimeFormat :: ByteString
+pgTimeFormat = C8.pack "%Y-%m-%d %H:%M:%S%Q %Z"
 
 logEntry :: Parser Payload
 logEntry = do
