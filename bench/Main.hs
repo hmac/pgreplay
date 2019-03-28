@@ -30,26 +30,57 @@ main = do
       connDiscLog' = C8.pack connDiscLog
       detailLog' = C8.pack detailLog
 
+  let statementLogT = T.pack statementLog
+      durationLogT = T.pack durationLog
+      parseStmtLogT = T.pack parseStmtLog
+      parseStmtMultiLogT = T.pack parseStmtMultiLog
+      bindStmtLogT = T.pack bindStmtLog
+      execStmtLogT = T.pack execStmtLog
+      connRecvLogT = T.pack connRecvLog
+      connAuthLogT = T.pack connAuthLog
+      connDiscLogT = T.pack connDiscLog
+      detailLogT = T.pack detailLog
+
   defaultMain [
-      bgroup "text" [ bench "100 lines" $ nfIO (parseLines smallT 0)
-                    , bench "1000 lines" $ nfIO (parseLines mediumT 0)
-                    , bench "10000 lines" $ nfIO (parseLines largeT 0)
-                    ]
-    , bgroup "bytestring" [ bench "100 lines" $ nfIO (parseLinesBS smallBS 0)
-                          , bench "1000 lines" $ nfIO (parseLinesBS mediumBS 0)
-                          , bench "10000 lines" $ nfIO (parseLinesBS largeBS 0)
-                          ]
-    , bgroup "bytestring/micro" [bench "statement" $ nfIO (parseLineBS statementLog')
-                               , bench "duration" $ nfIO (parseLineBS durationLog')
-                               , bench "parse" $ nfIO (parseLineBS parseStmtLog')
-                               , bench "parsemulti" $ nfIO (parseLineBS parseStmtMultiLog')
-                               , bench "bind" $ nfIO (parseLineBS bindStmtLog')
-                               , bench "detail" $ nfIO (parseLineBS detailLog')
-                               , bench "execute" $ nfIO (parseLineBS execStmtLog')
-                               , bench "connrecv" $ nfIO (parseLineBS connRecvLog')
-                               , bench "connauth" $ nfIO (parseLineBS connAuthLog')
-                               , bench "conndisc" $ nfIO (parseLineBS connDiscLog')
+      bgroup "100 lines" [ bench "text" $ nfIO (parseLines smallT 0)
+                         , bench "bytestring" $ nfIO (parseLinesBS smallBS 0)
+                         ]
+    , bgroup "1000 lines" [ bench "text" $ nfIO (parseLines mediumT 0)
+                         , bench "bytestring" $ nfIO (parseLinesBS mediumBS 0)
+                         ]
+    , bgroup "10000 lines" [ bench "text" $ nfIO (parseLines largeT 0)
+                         , bench "bytestring" $ nfIO (parseLinesBS largeBS 0)
+                         ]
+    , bgroup "micro/statement" [ bench "bytestring" $ nfIO (parseLineBS statementLog')
+                               , bench "text" $ nfIO (parseLine statementLogT)
                                ]
+    , bgroup "micro/duration" [ bench "bytestring" $ nfIO (parseLineBS durationLog')
+                              , bench "text" $ nfIO (parseLine durationLogT)
+                              ]
+    , bgroup "micro/parse" [ bench "bytestring" $ nfIO (parseLineBS parseStmtLog')
+                           , bench "text" $ nfIO (parseLine parseStmtLogT)
+                           ]
+    , bgroup "micro/parsemulti" [ bench "bytestring" $ nfIO (parseLineBS parseStmtMultiLog')
+                                , bench "text" $ nfIO (parseLine parseStmtMultiLogT)
+                                ]
+    , bgroup "micro/bind" [ bench "bytestring" $ nfIO (parseLineBS bindStmtLog')
+                          , bench "text" $ nfIO (parseLine bindStmtLogT)
+                          ]
+    , bgroup "micro/detail" [ bench "bytestring" $ nfIO (parseLineBS detailLog')
+                            , bench "text" $ nfIO (parseLine detailLogT)
+                            ]
+    , bgroup "micro/execute" [ bench "bytestring" $ nfIO (parseLineBS execStmtLog')
+                             , bench "text" $ nfIO (parseLine execStmtLogT)
+                             ]
+    , bgroup "micro/connrecv" [ bench "bytestring" $ nfIO (parseLineBS connRecvLog')
+                              , bench "text" $ nfIO (parseLine connRecvLogT)
+                              ]
+    , bgroup "micro/connauth" [ bench "bytestring" $ nfIO (parseLineBS connAuthLog')
+                              , bench "text" $ nfIO (parseLine connAuthLogT)
+                              ]
+    , bgroup "micro/conndisc" [ bench "bytestring" $ nfIO (parseLineBS connDiscLog')
+                              , bench "text" $ nfIO (parseLine connDiscLogT)
+                              ]
     ]
 
 parseLines :: T.Text -> Int -> IO Int
@@ -60,6 +91,15 @@ parseLines input len =
       if T.null rest
         then pure len
         else parseLines rest (len + 1)
+
+parseLine :: T.Text -> IO ()
+parseLine input =
+  case AT.parse parseLog input of
+    AT.Fail _ ctxs err -> error $ err ++ " " ++ show ctxs
+    AT.Done rest _ ->
+      if T.null rest
+         then pure ()
+         else error $ "input left: " ++ show rest
 
 parseLinesBS :: BS.ByteString -> Int -> IO Int
 parseLinesBS input len =
