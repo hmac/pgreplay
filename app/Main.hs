@@ -3,6 +3,7 @@ import           System.Environment       (getArgs)
 import           Conduit
 import           Data.Conduit.Attoparsec
 import qualified Data.Conduit.Combinators as C
+import           Data.Conduit.Zlib        (ungzip)
 
 import           Parser.ByteString        (Log (..), Payload (..), parseLog)
 
@@ -13,6 +14,7 @@ main = do
   [filename] <- getArgs
   stats <- runConduitRes
             $ C.sourceFile filename
+           .| ungzip
            .| conduitParser Parser.ByteString.parseLog
            .| mapC (\(_, l) -> countLogTypes l)
            -- .| filterC isJust

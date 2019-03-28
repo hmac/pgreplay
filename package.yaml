@@ -32,7 +32,7 @@ executables:
     - time
     - pretty-simple
     - bytestring
-    - zlib
+    - zlib-conduit
     - conduit
     - conduit-extra
     - conduit-combinators
